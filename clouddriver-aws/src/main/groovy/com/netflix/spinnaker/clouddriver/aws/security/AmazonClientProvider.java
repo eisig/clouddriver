@@ -63,7 +63,7 @@ import java.util.List;
  */
 public class AmazonClientProvider {
 
-  public static final String DEFAULT_REGION = null;
+  public static final String DEFAULT_REGION = "cn-north-1";
 
   private final AwsSdkClientSupplier awsSdkClientSupplier;
   private final ProxyHandlerBuilder proxyHandlerBuilder;
