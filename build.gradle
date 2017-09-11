@@ -19,9 +19,7 @@ buildscript {
     springBootVersion = "1.5.4.RELEASE"
   }
   repositories {
-    jcenter()
-    maven { url "http://spinnaker.bintray.com/gradle" }
-    maven { url "https://plugins.gradle.org/m2/" }
+    maven { url "http://internal-artifactory-970728191.cn-north-1.elb.amazonaws.com.cn/artifactory/maven-spinnaker-build/"}
   }
   dependencies {
     classpath 'com.netflix.spinnaker.gradle:spinnaker-gradle-project:3.16.0'
