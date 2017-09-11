@@ -12,6 +12,7 @@ class DubboAccountConfigurationProperties {
     String name
     List<String> regions
     String url
+    String stack
   }
   List<DubboAccoun> accounts = []
 }
