@@ -57,6 +57,7 @@ public class DubboSupport {
       throw new IllegalStateException("dubbo configuration not supplied")
     }
 
+    log.debug("Start update dubbo discovery  state to {}", discoveryStatus)
     def dubboAdmin = getDubboAdmin(description)
 
     if (dubboAdmin == null) {
