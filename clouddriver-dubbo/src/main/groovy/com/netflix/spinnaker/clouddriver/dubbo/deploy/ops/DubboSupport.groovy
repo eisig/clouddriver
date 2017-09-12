@@ -4,22 +4,22 @@ import com.amazonaws.AmazonServiceException
 import com.netflix.spinnaker.clouddriver.data.task.Task
 import com.netflix.spinnaker.clouddriver.dubbo.api.DubboAdminApi
 import com.netflix.spinnaker.clouddriver.dubbo.api.model.UpdateResult
+import com.netflix.spinnaker.clouddriver.dubbo.privoder.DubboAdminApiManager
 import groovy.transform.InheritConstructors
 import groovy.util.logging.Slf4j
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 import retrofit.RetrofitError
-import retrofit.client.Response
 
 /**
  * Created by eisig on 2017/9/10.
  */
 @Slf4j
 @Component
-class DubboSupport {
+public class DubboSupport {
 
-  DubboAdminApi getDubboAdmin(def credentials, String region) {
-    return null
+  DubboAdminApi getDubboAdmin(def description) {
+    def adminApi = dubboAdminApiManager.find(DubboUtil.stackOfAsgName(description.asgName))
   }
 
   boolean verifyInstanceAndAsgExist(def credentials,
@@ -29,8 +29,11 @@ class DubboSupport {
     return false;
   }
 
+  @Autowired
+  DubboAdminApiManager dubboAdminApiManager;
+
   @Autowired(required = false)
-  EurekaSupportConfigurationProperties eurekaSupportConfigurationProperties
+  DubboSupportConfigurationProperties dubboSupportConfigurationProperties
 
   void updateDiscoveryStatusForInstances(def description,
                                          Task task,
@@ -38,7 +41,7 @@ class DubboSupport {
                                          DiscoveryStatus discoveryStatus,
                                          List<String> instanceIds) {
     updateDiscoveryStatusForInstances(
-      description, task, phaseName, discoveryStatus, instanceIds, eurekaSupportConfigurationProperties.retryMax, eurekaSupportConfigurationProperties.retryMax
+      description, task, phaseName, discoveryStatus, instanceIds, dubboSupportConfigurationProperties.retryMax, dubboSupportConfigurationProperties.retryMax
     )
   }
 
@@ -50,22 +53,22 @@ class DubboSupport {
                                          int findApplicationNameRetryMax,
                                          int updateEurekaRetryMax) {
 
-    if (eurekaSupportConfigurationProperties == null) {
-      throw new IllegalStateException("eureka configuration not supplied")
+    if (dubboSupportConfigurationProperties == null) {
+      throw new IllegalStateException("dubbo configuration not supplied")
     }
 
-    def dubboAdmin = getDubboAdmin(description.credentials, description.region)
-    def random = new Random()
-    def applicationName = null
+    def dubboAdmin = getDubboAdmin(description)
 
-
+    if (dubboAdmin == null) {
+      throw new IllegalStateException("count not find dubboAdmin for asg: ${description.asgName}")
+    }
 
     def errors = [:]
     boolean shouldFail = false
     int index = 0
     for (String instanceId : instanceIds) {
       if (index > 0) {
-        sleep eurekaSupportConfigurationProperties.throttleMillis
+        sleep dubboSupportConfigurationProperties.throttleMillis
       }
 
 
@@ -159,7 +162,7 @@ class DubboSupport {
   }
 
   protected long getDiscoveryRetryMs() {
-    return eurekaSupportConfigurationProperties.retryIntervalMillis
+    return dubboSupportConfigurationProperties.retryIntervalMillis
   }
 
   enum DiscoveryStatus {

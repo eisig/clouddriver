@@ -19,7 +19,7 @@ package com.netflix.spinnaker.clouddriver.dubbo.deploy.ops
 import org.springframework.boot.context.properties.ConfigurationProperties
 
 @ConfigurationProperties('discovery.dubbo')
-class EurekaSupportConfigurationProperties {
+class DubboSupportConfigurationProperties {
   int retryMax = 10
   int attemptShortCircuitEveryNInstances = 100
   int retryIntervalMillis = 3000

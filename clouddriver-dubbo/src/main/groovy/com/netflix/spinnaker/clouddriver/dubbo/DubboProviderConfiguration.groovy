@@ -17,7 +17,9 @@
 package com.netflix.spinnaker.clouddriver.dubbo
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.netflix.spinnaker.clouddriver.dubbo.deploy.ops.EurekaSupportConfigurationProperties
+import com.netflix.spinnaker.clouddriver.dubbo.api.DubboAdminApiFactory
+import com.netflix.spinnaker.clouddriver.dubbo.deploy.ops.DubboSupportConfigurationProperties
+import com.netflix.spinnaker.clouddriver.dubbo.privoder.DubboAdminApiManager
 import com.netflix.spinnaker.clouddriver.dubbo.privoder.config.DubboAccountConfigurationProperties
 import org.springframework.beans.factory.config.ConfigurableBeanFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -31,10 +33,10 @@ import org.springframework.context.annotation.Scope
 import java.util.regex.Pattern
 
 @Configuration
-@EnableConfigurationProperties(EurekaSupportConfigurationProperties)
+@EnableConfigurationProperties(DubboSupportConfigurationProperties)
 @ConditionalOnProperty('dubbo.provider.enabled')
 @ComponentScan(["com.netflix.spinnaker.clouddriver.dubbo"])
-class EurekaProviderConfiguration {
+class DubboProviderConfiguration {
   @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
   @Bean
   @ConfigurationProperties("dubbo.provider")
@@ -42,6 +44,19 @@ class EurekaProviderConfiguration {
     new DubboAccountConfigurationProperties()
   }
 
-  
+  @Bean
+  DubboAdminApiManager dubboAdminApiManage(DubboAccountConfigurationProperties dubboAccountConfigurationProperties,
+                                           ObjectMapper objectMapper,
+                                           DubboAdminApiFactory dubboAdminApiFactory) {
+    def  agents = [:]
+    dubboAccountConfigurationProperties.accounts.each { DubboAccountConfigurationProperties.DubboAccount accountConfig ->
+      accountConfig.stacks.each { stack ->
+        String dubboAdminApiHost = accountConfig.url.replaceAll(Pattern.quote('{{stack}}'), stack)
+        agents[stack] = dubboAdminApiFactory.createApi(dubboAdminApiHost);
+      }
+    }
+    DubboAdminApiManager apiManager = new DubboAdminApiManager(agents)
+    apiManager
+  }
 
 }

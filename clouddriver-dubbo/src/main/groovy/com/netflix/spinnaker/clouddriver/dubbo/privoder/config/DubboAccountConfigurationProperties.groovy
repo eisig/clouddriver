@@ -8,11 +8,11 @@ import groovy.transform.ToString
 @ToString(includeNames = true)
 class DubboAccountConfigurationProperties {
   @ToString(includeNames = true)
-  static class DubboAccoun {
+  static class DubboAccount {
     String name
     List<String> regions
     String url
-    String stack
+    List<String> stacks
   }
-  List<DubboAccoun> accounts = []
+  List<DubboAccount> accounts = []
 }

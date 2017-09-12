@@ -20,6 +20,8 @@ import com.amazonaws.services.autoscaling.model.AutoScalingGroup
 import com.amazonaws.services.elasticloadbalancing.model.Instance
 import com.netflix.spinnaker.clouddriver.data.task.Task
 import com.netflix.spinnaker.clouddriver.data.task.TaskRepository
+import com.netflix.spinnaker.clouddriver.dubbo.deploy.ops.DubboSupport
+import com.netflix.spinnaker.clouddriver.dubbo.deploy.ops.DubboUtil
 import com.netflix.spinnaker.clouddriver.eureka.deploy.ops.AbstractEurekaSupport
 import com.netflix.spinnaker.clouddriver.orchestration.AtomicOperation
 import com.netflix.spinnaker.clouddriver.aws.deploy.description.EnableDisableInstanceDiscoveryDescription
@@ -36,6 +38,9 @@ abstract class AbstractEnableDisableInstanceDiscoveryAtomicOperation implements 
 
   @Autowired
   AwsEurekaSupport discoverySupport
+
+  @Autowired(required = false)
+  DubboSupport dubboSupport;
 
   EnableDisableInstanceDiscoveryDescription description
 
@@ -62,16 +67,31 @@ abstract class AbstractEnableDisableInstanceDiscoveryAtomicOperation implements 
       }*.instanceId as Set<String>
       def instancesInAsg = description.instanceIds.findAll {
         asgInstanceIds.contains(it)
-      }.collect { new Instance(it)}
+      }.collect { new Instance(it) }
 
       if (!instancesInAsg) {
         return
       }
 
-      def status = isEnable() ? AbstractEurekaSupport.DiscoveryStatus.Enable : AbstractEurekaSupport.DiscoveryStatus.Disable
-      discoverySupport.updateDiscoveryStatusForInstances(
+      def credentials = description.credentials
+      if (!DubboUtil.dubboOnlyDiscover(credentials.discovery)) {
+        def status = isEnable() ? AbstractEurekaSupport.DiscoveryStatus.Enable : AbstractEurekaSupport.DiscoveryStatus.Disable
+        discoverySupport.updateDiscoveryStatusForInstances(
           description, task, phaseName, status, instancesInAsg*.instanceId
-      )
+        )
+      }
+
+      if (DubboUtil.dubboDiscoveryEnabled(credentials.discovery)) {
+        if (dubboSupport == null) {
+          task.updateStatus phaseName, "Dubbo Discovery enabled, unable to find DubboSupport instance"
+          task.fail()
+          return null
+        }
+        def status = isEnable() ? DubboSupport.DiscoveryStatus.Enable : DubboSupport.DiscoveryStatus.Disable
+        dubboSupport.updateDiscoveryStatusForInstances(
+          description, task, phaseName, status, instancesInAsg*.instanceId
+        )
+      }
     }
 
     null
