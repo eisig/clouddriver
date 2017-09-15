@@ -36,6 +36,8 @@ import com.netflix.spinnaker.clouddriver.aws.model.AutoScalingProcessType
 import com.netflix.spinnaker.clouddriver.aws.services.RegionScopedProviderFactory
 import com.netflix.spinnaker.clouddriver.data.task.Task
 import com.netflix.spinnaker.clouddriver.data.task.TaskRepository
+import com.netflix.spinnaker.clouddriver.dubbo.deploy.ops.DubboSupport
+import com.netflix.spinnaker.clouddriver.dubbo.deploy.ops.DubboUtil
 import com.netflix.spinnaker.clouddriver.eureka.deploy.ops.AbstractEurekaSupport
 import com.netflix.spinnaker.clouddriver.orchestration.AtomicOperation
 import groovy.util.logging.Slf4j
@@ -55,6 +57,9 @@ abstract class AbstractEnableDisableAtomicOperation implements AtomicOperation<V
 
   @Autowired
   AwsEurekaSupport discoverySupport
+
+  @Autowired(required = false)
+  DubboSupport dubboSupport;
 
   EnableDisableAsgDescription description
 
@@ -180,7 +185,9 @@ abstract class AbstractEnableDisableAtomicOperation implements AtomicOperation<V
 
       if (credentials.discoveryEnabled && instanceIds) {
         def status = disable ? AbstractEurekaSupport.DiscoveryStatus.Disable : AbstractEurekaSupport.DiscoveryStatus.Enable
-        task.updateStatus phaseName, "Marking ASG $serverGroupName as $status with Discovery"
+        boolean dubboOnlyDiscovery = DubboUtil.dubboOnlyDiscover(credentials.discovery)
+        boolean dubboDiscovery = DubboUtil.dubboDiscoveryEnabled(credentials.discovery)
+        task.updateStatus phaseName, "Marking ASG $serverGroupName as $status with Discovery(${dubboDiscovery}:${dubboOnlyDiscovery})"
 
         def enableDisableInstanceDiscoveryDescription = new EnableDisableInstanceDiscoveryDescription(
             credentials: credentials,
@@ -188,9 +195,23 @@ abstract class AbstractEnableDisableAtomicOperation implements AtomicOperation<V
             asgName: serverGroupName,
             instanceIds: instanceIds
         )
-        discoverySupport.updateDiscoveryStatusForInstances(
+        if (!DubboUtil.dubboOnlyDiscover(credentials.discovery)){
+          discoverySupport.updateDiscoveryStatusForInstances(
             enableDisableInstanceDiscoveryDescription, task, phaseName, status, instanceIds
-        )
+          )
+        }
+
+        if (DubboUtil.dubboDiscoveryEnabled(credentials.discovery)) {
+          if (dubboSupport == null) {
+            task.updateStatus phaseName, "Dubbo Discovery enabled, but unable to find DubboSupport instance"
+            return false
+          }
+          def dubboStatus = disable ? DubboSupport.DiscoveryStatus.Disable : DubboSupport.DiscoveryStatus.Enable
+          dubboSupport.updateDiscoveryStatusForInstances(
+            enableDisableInstanceDiscoveryDescription, task, phaseName, dubboStatus, instanceIds
+          )
+        }
+
       }
       task.updateStatus phaseName, "Finished ${presentParticipling} ASG $serverGroupName."
       return true

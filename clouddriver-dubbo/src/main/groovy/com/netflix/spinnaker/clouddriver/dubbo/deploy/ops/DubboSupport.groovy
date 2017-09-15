@@ -33,13 +33,16 @@ public class DubboSupport {
   DubboAdminApiManager dubboAdminApiManager;
 
   @Autowired(required = false)
-  DubboSupportConfigurationProperties dubboSupportConfigurationProperties
+  DubboSupportConfigurationProperties dubboSupportConfigurationProperties = new DubboSupportConfigurationProperties()
 
   void updateDiscoveryStatusForInstances(def description,
                                          Task task,
                                          String phaseName,
                                          DiscoveryStatus discoveryStatus,
+
                                          List<String> instanceIds) {
+    log.debug("Start update dubbo discovery  state to {}", discoveryStatus)
+
     updateDiscoveryStatusForInstances(
       description, task, phaseName, discoveryStatus, instanceIds, dubboSupportConfigurationProperties.retryMax, dubboSupportConfigurationProperties.retryMax
     )
@@ -57,7 +60,7 @@ public class DubboSupport {
       throw new IllegalStateException("dubbo configuration not supplied")
     }
 
-    log.debug("Start update dubbo discovery  state to {}", discoveryStatus)
+//    log.debug("Start update dubbo discovery  state to {}", discoveryStatus)
     def dubboAdmin = getDubboAdmin(description)
 
     if (dubboAdmin == null) {
