@@ -15,19 +15,16 @@ import retrofit.RetrofitError
  * Created by eisig on 2017/9/10.
  */
 @Slf4j
-@Component
-public class DubboSupport {
+public abstract class AbstractDubboSupport {
 
   DubboAdminApi getDubboAdmin(def description) {
     def adminApi = dubboAdminApiManager.find(DubboUtil.stackOfAsgName(description.asgName))
   }
 
-  boolean verifyInstanceAndAsgExist(def credentials,
+  abstract boolean verifyInstanceAndAsgExist(def credentials,
                                     String region,
                                     String instanceId,
-                                    String asgName) {
-    return false;
-  }
+                                    String asgName)
 
   @Autowired
   DubboAdminApiManager dubboAdminApiManager;
@@ -113,7 +110,7 @@ public class DubboSupport {
     if (shouldFail) {
       task.updateStatus phaseName, "Failed marking instances '${discoveryStatus.value}' in discovery for instances ${errors.keySet()}"
       task.fail()
-      DubboSupport.log.info("[$phaseName] - Failed marking discovery $discoveryStatus.value for instances ${errors}")
+      log.info("[$phaseName] - Failed marking discovery $discoveryStatus.value for instances ${errors}")
     }
   }
 
@@ -130,7 +127,7 @@ public class DubboSupport {
           throw ex
         }
 
-        DubboSupport.log.debug("[$phaseName] - Caught retryable exception", ex)
+        log.debug("[$phaseName] - Caught retryable exception", ex)
 
         retryCount++
         sleep(getDiscoveryRetryMs());
@@ -139,7 +136,7 @@ public class DubboSupport {
           throw re
         }
 
-        DubboSupport.log.debug("[$phaseName] - Failed calling external service", re)
+        log.debug("[$phaseName] - Failed calling external service", re)
 
         if (re.kind == RetrofitError.Kind.NETWORK || re.response.status == 404 || re.response.status == 406) {
           retryCount++
@@ -153,7 +150,7 @@ public class DubboSupport {
         }
       } catch (AmazonServiceException ase) {
         if (ase.statusCode == 503) {
-          DubboSupport.log.debug("[$phaseName] - Failed calling AmazonService", ase)
+          log.debug("[$phaseName] - Failed calling AmazonService", ase)
           retryCount++
           sleep(getDiscoveryRetryMs())
         } else {

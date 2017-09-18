@@ -36,7 +36,7 @@ import com.netflix.spinnaker.clouddriver.aws.model.AutoScalingProcessType
 import com.netflix.spinnaker.clouddriver.aws.services.RegionScopedProviderFactory
 import com.netflix.spinnaker.clouddriver.data.task.Task
 import com.netflix.spinnaker.clouddriver.data.task.TaskRepository
-import com.netflix.spinnaker.clouddriver.dubbo.deploy.ops.DubboSupport
+import com.netflix.spinnaker.clouddriver.dubbo.deploy.ops.AbstractDubboSupport
 import com.netflix.spinnaker.clouddriver.dubbo.deploy.ops.DubboUtil
 import com.netflix.spinnaker.clouddriver.eureka.deploy.ops.AbstractEurekaSupport
 import com.netflix.spinnaker.clouddriver.orchestration.AtomicOperation
@@ -59,7 +59,7 @@ abstract class AbstractEnableDisableAtomicOperation implements AtomicOperation<V
   AwsEurekaSupport discoverySupport
 
   @Autowired(required = false)
-  DubboSupport dubboSupport;
+  AbstractDubboSupport dubboSupport;
 
   EnableDisableAsgDescription description
 
@@ -206,7 +206,7 @@ abstract class AbstractEnableDisableAtomicOperation implements AtomicOperation<V
             task.updateStatus phaseName, "Dubbo Discovery enabled, but unable to find DubboSupport instance"
             return false
           }
-          def dubboStatus = disable ? DubboSupport.DiscoveryStatus.Disable : DubboSupport.DiscoveryStatus.Enable
+          def dubboStatus = disable ? AbstractDubboSupport.DiscoveryStatus.Disable : AbstractDubboSupport.DiscoveryStatus.Enable
           dubboSupport.updateDiscoveryStatusForInstances(
             enableDisableInstanceDiscoveryDescription, task, phaseName, dubboStatus, instanceIds
           )

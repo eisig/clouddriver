@@ -20,7 +20,7 @@ import com.amazonaws.services.autoscaling.model.AutoScalingGroup
 import com.amazonaws.services.elasticloadbalancing.model.Instance
 import com.netflix.spinnaker.clouddriver.data.task.Task
 import com.netflix.spinnaker.clouddriver.data.task.TaskRepository
-import com.netflix.spinnaker.clouddriver.dubbo.deploy.ops.DubboSupport
+import com.netflix.spinnaker.clouddriver.dubbo.deploy.ops.AbstractDubboSupport
 import com.netflix.spinnaker.clouddriver.dubbo.deploy.ops.DubboUtil
 import com.netflix.spinnaker.clouddriver.eureka.deploy.ops.AbstractEurekaSupport
 import com.netflix.spinnaker.clouddriver.orchestration.AtomicOperation
@@ -40,7 +40,7 @@ abstract class AbstractEnableDisableInstanceDiscoveryAtomicOperation implements 
   AwsEurekaSupport discoverySupport
 
   @Autowired(required = false)
-  DubboSupport dubboSupport;
+  AwsDubboSupport dubboSupport;
 
   EnableDisableInstanceDiscoveryDescription description
 
@@ -87,7 +87,7 @@ abstract class AbstractEnableDisableInstanceDiscoveryAtomicOperation implements 
           task.fail()
           return null
         }
-        def status = isEnable() ? DubboSupport.DiscoveryStatus.Enable : DubboSupport.DiscoveryStatus.Disable
+        def status = isEnable() ? AbstractDubboSupport.DiscoveryStatus.Enable : AbstractDubboSupport.DiscoveryStatus.Disable
         dubboSupport.updateDiscoveryStatusForInstances(
           description, task, phaseName, status, instancesInAsg*.instanceId
         )
