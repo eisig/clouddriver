@@ -25,10 +25,12 @@ import com.netflix.spinnaker.cats.cache.CacheData;
 import com.netflix.spinnaker.cats.provider.ProviderCache;
 import com.netflix.spinnaker.clouddriver.kubernetes.caching.KubernetesCachingAgent;
 import com.netflix.spinnaker.clouddriver.kubernetes.security.KubernetesNamedAccountCredentials;
+import com.netflix.spinnaker.clouddriver.kubernetes.v2.description.manifest.KubernetesManifest;
 import com.netflix.spinnaker.clouddriver.kubernetes.v2.security.KubernetesV2Credentials;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -54,8 +56,10 @@ public abstract class KubernetesV2CachingAgent<T> extends KubernetesCachingAgent
   }
 
   protected CacheResult buildCacheResult(List<T> resources) {
+    Map<T, List<KubernetesManifest>> relationships = loadSecondaryResourceRelationships(resources);
+
     List<CacheData> resourceData = resources.stream()
-        .map(rs -> KubernetesCacheDataConverter.fromResource(accountName, objectMapper, rs))
+        .map(rs -> KubernetesCacheDataConverter.convertAsResource(accountName, objectMapper, rs, relationships.get(rs)))
         .filter(Objects::nonNull)
         .collect(Collectors.toList());
 
@@ -64,13 +68,21 @@ public abstract class KubernetesV2CachingAgent<T> extends KubernetesCachingAgent
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
 
+    resourceData.addAll(resources.stream()
+        .map(rs -> KubernetesCacheDataConverter.convertAsArtifact(accountName, objectMapper, rs))
+        .filter(Objects::nonNull)
+        .collect(Collectors.toList()));
+
     resourceData.addAll(invertedRelationships);
 
-    Map<String, Collection<CacheData>> entries = KubernetesCacheDataConverter.stratifyCacheDataByGroup(resourceData);
+    Map<String, Collection<CacheData>> entries = KubernetesCacheDataConverter.stratifyCacheDataByGroup(KubernetesCacheDataConverter.dedupCacheData(resourceData));
     KubernetesCacheDataConverter.logStratifiedCacheData(getAgentType(), entries);
 
     return new DefaultCacheResult(entries);
+  }
 
+  protected Map<T, List<KubernetesManifest>> loadSecondaryResourceRelationships(List<T> primaryResourceList) {
+    return new HashMap<>();
   }
 
   protected abstract List<T> loadPrimaryResourceList();

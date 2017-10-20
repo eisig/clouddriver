@@ -18,13 +18,12 @@
 package com.netflix.spinnaker.clouddriver.kubernetes.v2.caching.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableMap;
 import com.netflix.spectator.api.Registry;
 import com.netflix.spinnaker.cats.agent.AgentDataType;
 import com.netflix.spinnaker.clouddriver.kubernetes.security.KubernetesNamedAccountCredentials;
 import com.netflix.spinnaker.clouddriver.kubernetes.v2.caching.Keys;
-import com.netflix.spinnaker.clouddriver.kubernetes.v2.description.KubernetesApiVersion;
-import com.netflix.spinnaker.clouddriver.kubernetes.v2.description.KubernetesKind;
+import com.netflix.spinnaker.clouddriver.kubernetes.v2.description.manifest.KubernetesApiVersion;
+import com.netflix.spinnaker.clouddriver.kubernetes.v2.description.manifest.KubernetesKind;
 import com.netflix.spinnaker.clouddriver.kubernetes.v2.security.KubernetesV2Credentials;
 import io.kubernetes.client.models.V1beta1ReplicaSet;
 import lombok.Getter;
@@ -35,8 +34,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static com.netflix.spinnaker.cats.agent.AgentDataType.Authority.AUTHORITATIVE;
@@ -76,8 +73,8 @@ public class KubernetesReplicaSetCachingAgent extends KubernetesV2OnDemandCachin
   }
 
   @Override
-  protected OnDemandType onDemandType() {
-    return OnDemandType.ServerGroup;
+  protected Class<V1beta1ReplicaSet> primaryResourceClass() {
+    return V1beta1ReplicaSet.class;
   }
 
   @Override
@@ -88,19 +85,5 @@ public class KubernetesReplicaSetCachingAgent extends KubernetesV2OnDemandCachin
   @Override
   protected KubernetesApiVersion primaryApiVersion() {
     return KubernetesApiVersion.EXTENSIONS_V1BETA1;
-  }
-
-  @Override
-  protected Map<String, String> mapKeyToOnDemandResult(Keys.InfrastructureCacheKey key) {
-    return new ImmutableMap.Builder<String, String>()
-        .put("serverGroup", key.getName())
-        .put("account", key.getAccount())
-        .put("region", key.getNamespace())
-        .build();
-  }
-
-  @Override
-  protected Optional<String> getResourceNameFromOnDemandRequest(Map<String, ?> request) {
-    return request.containsKey("serverGroup") ? Optional.of((String) request.get("serverGroup")) : Optional.empty();
   }
 }

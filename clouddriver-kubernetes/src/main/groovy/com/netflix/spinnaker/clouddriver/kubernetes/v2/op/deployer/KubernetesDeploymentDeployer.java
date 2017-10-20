@@ -17,15 +17,31 @@
 
 package com.netflix.spinnaker.clouddriver.kubernetes.v2.op.deployer;
 
+import com.netflix.spinnaker.clouddriver.kubernetes.v2.description.KubernetesSpinnakerKindMap;
+import com.netflix.spinnaker.clouddriver.kubernetes.v2.description.manifest.KubernetesApiVersion;
+import com.netflix.spinnaker.clouddriver.kubernetes.v2.description.manifest.KubernetesKind;
 import com.netflix.spinnaker.clouddriver.kubernetes.v2.security.KubernetesV2Credentials;
+import com.netflix.spinnaker.clouddriver.model.ServerGroup;
+import com.netflix.spinnaker.clouddriver.model.ServerGroup.Capacity;
 import io.kubernetes.client.models.AppsV1beta1Deployment;
+import io.kubernetes.client.models.V1DeleteOptions;
 import org.springframework.stereotype.Component;
 
 @Component
-public class KubernetesDeploymentDeployer extends KubernetesDeployer<AppsV1beta1Deployment> {
+public class KubernetesDeploymentDeployer extends KubernetesDeployer<AppsV1beta1Deployment> implements CanResize, CanDelete<V1DeleteOptions> {
   @Override
-  Class<AppsV1beta1Deployment> getDeployedClass() {
+  public Class<AppsV1beta1Deployment> getDeployedClass() {
     return AppsV1beta1Deployment.class;
+  }
+
+  @Override
+  public KubernetesKind kind() {
+    return KubernetesKind.DEPLOYMENT;
+  }
+
+  @Override
+  public KubernetesApiVersion apiVersion() {
+    return KubernetesApiVersion.APPS_V1BETA1;
   }
 
   @Override
@@ -38,5 +54,30 @@ public class KubernetesDeploymentDeployer extends KubernetesDeployer<AppsV1beta1
     } else {
       credentials.createDeployment(resource);
     }
+  }
+
+  @Override
+  public boolean versioned() {
+    return false;
+  }
+
+  @Override
+  public KubernetesSpinnakerKindMap.SpinnakerKind spinnakerKind() {
+    return KubernetesSpinnakerKindMap.SpinnakerKind.UNCLASSIFIED;
+  }
+
+  @Override
+  public void resize(KubernetesV2Credentials credentials, String namespace, String name, Capacity capacity) {
+    credentials.resizeDeployment(namespace, name, capacity.getDesired());
+  }
+
+  @Override
+  public Class<V1DeleteOptions> getDeleteOptionsClass() {
+    return V1DeleteOptions.class;
+  }
+
+  @Override
+  public void delete(KubernetesV2Credentials credentials, String namespace, String name, V1DeleteOptions deleteOptions) {
+    credentials.deleteDeployment(namespace, name, deleteOptions);
   }
 }
