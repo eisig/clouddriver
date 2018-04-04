@@ -22,7 +22,6 @@ import com.netflix.spinnaker.clouddriver.kubernetes.config.CustomKubernetesResou
 import com.netflix.spinnaker.clouddriver.kubernetes.config.LinkedDockerRegistryConfiguration;
 import com.netflix.spinnaker.clouddriver.kubernetes.v1.security.KubernetesV1Credentials;
 import com.netflix.spinnaker.clouddriver.kubernetes.v2.description.manifest.KubernetesManifest;
-import com.netflix.spinnaker.clouddriver.kubernetes.v2.names.KubernetesManifestNamer;
 import com.netflix.spinnaker.clouddriver.kubernetes.v2.op.job.KubectlJobExecutor;
 import com.netflix.spinnaker.clouddriver.kubernetes.v2.security.KubernetesV2Credentials;
 import com.netflix.spinnaker.clouddriver.names.NamerRegistry;
@@ -55,6 +54,7 @@ public class KubernetesNamedAccountCredentials<C extends KubernetesCredentials> 
   final private Boolean serviceAccount;
   private List<String> namespaces;
   private List<String> omitNamespaces;
+  private String skin;
   final private int cacheThreads;
   private C credentials;
   private final List<String> requiredGroupMembership;
@@ -77,6 +77,7 @@ public class KubernetesNamedAccountCredentials<C extends KubernetesCredentials> 
                                     Boolean serviceAccount,
                                     List<String> namespaces,
                                     List<String> omitNamespaces,
+                                    String skin,
                                     int cacheThreads,
                                     List<LinkedDockerRegistryConfiguration> dockerRegistries,
                                     List<String> requiredGroupMembership,
@@ -96,6 +97,7 @@ public class KubernetesNamedAccountCredentials<C extends KubernetesCredentials> 
     this.serviceAccount = serviceAccount;
     this.namespaces = namespaces;
     this.omitNamespaces = omitNamespaces;
+    this.skin = skin;
     this.cacheThreads = cacheThreads;
     this.requiredGroupMembership = requiredGroupMembership;
     this.permissions = permissions;
@@ -117,6 +119,11 @@ public class KubernetesNamedAccountCredentials<C extends KubernetesCredentials> 
   @Override
   public ProviderVersion getProviderVersion() {
     return providerVersion;
+  }
+
+  @Override
+  public String getSkin() {
+    return skin != null ? skin : getProviderVersion().toString();
   }
 
   @Override
@@ -177,6 +184,7 @@ public class KubernetesNamedAccountCredentials<C extends KubernetesCredentials> 
     Boolean configureImagePullSecrets;
     List<String> namespaces;
     List<String> omitNamespaces;
+    String skin;
     int cacheThreads;
     C credentials;
     List<String> requiredGroupMembership;
@@ -187,6 +195,8 @@ public class KubernetesNamedAccountCredentials<C extends KubernetesCredentials> 
     KubectlJobExecutor jobExecutor;
     Namer namer;
     List<CustomKubernetesResource> customResources;
+    List<String> kinds;
+    List<String> omitKinds;
     boolean debug;
 
     Builder name(String name) {
@@ -287,6 +297,11 @@ public class KubernetesNamedAccountCredentials<C extends KubernetesCredentials> 
       return this;
     }
 
+    Builder skin(String skin) {
+      this.skin = skin;
+      return this;
+    }
+
     Builder cacheThreads(int cacheThreads) {
       this.cacheThreads = cacheThreads;
       return this;
@@ -327,6 +342,16 @@ public class KubernetesNamedAccountCredentials<C extends KubernetesCredentials> 
       return this;
     }
 
+    Builder kinds(List<String> kinds) {
+      this.kinds = kinds;
+      return this;
+    }
+
+    Builder omitKinds(List<String> omitKinds) {
+      this.omitKinds = omitKinds;
+      return this;
+    }
+
     private C buildCredentials() {
       switch (providerVersion) {
         case v1:
@@ -357,11 +382,14 @@ public class KubernetesNamedAccountCredentials<C extends KubernetesCredentials> 
               .context(context)
               .oAuthServiceAccount(oAuthServiceAccount)
               .oAuthScopes(oAuthScopes)
+              .serviceAccount(serviceAccount)
               .userAgent(userAgent)
               .namespaces(namespaces)
               .omitNamespaces(omitNamespaces)
               .registry(spectatorRegistry)
               .customResources(customResources)
+              .kinds(kinds)
+              .omitKinds(omitKinds)
               .debug(debug)
               .jobExecutor(jobExecutor)
               .build();
@@ -377,6 +405,10 @@ public class KubernetesNamedAccountCredentials<C extends KubernetesCredentials> 
 
       if ((omitNamespaces != null && !omitNamespaces.isEmpty()) && (namespaces != null && !namespaces.isEmpty())) {
         throw new IllegalArgumentException("At most one of 'namespaces' and 'omitNamespaces' can be specified");
+      }
+
+      if ((omitKinds != null && !omitKinds.isEmpty()) && (kinds != null && !kinds.isEmpty())) {
+        throw new IllegalArgumentException("At most one of 'kinds' and 'omitKinds' can be specified");
       }
 
       if (cacheThreads == 0) {
@@ -401,6 +433,10 @@ public class KubernetesNamedAccountCredentials<C extends KubernetesCredentials> 
         configureImagePullSecrets = true;
       }
 
+      if (serviceAccount == null) {
+        serviceAccount = false;
+      }
+
       if (credentials == null) {
         credentials = buildCredentials();
       }
@@ -420,6 +456,7 @@ public class KubernetesNamedAccountCredentials<C extends KubernetesCredentials> 
           serviceAccount,
           namespaces,
           omitNamespaces,
+          skin,
           cacheThreads,
           dockerRegistries,
           requiredGroupMembership,

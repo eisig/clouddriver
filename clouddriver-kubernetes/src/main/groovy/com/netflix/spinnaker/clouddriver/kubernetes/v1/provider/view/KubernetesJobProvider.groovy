@@ -16,8 +16,8 @@
 
 package com.netflix.spinnaker.clouddriver.kubernetes.v1.provider.view
 
-import com.netflix.spinnaker.clouddriver.kubernetes.v1.model.KubernetesJobStatus
 import com.netflix.spinnaker.clouddriver.kubernetes.security.KubernetesNamedAccountCredentials
+import com.netflix.spinnaker.clouddriver.kubernetes.v1.model.KubernetesJobStatus
 import com.netflix.spinnaker.clouddriver.kubernetes.v1.security.KubernetesV1Credentials
 import com.netflix.spinnaker.clouddriver.model.JobProvider
 import com.netflix.spinnaker.clouddriver.model.JobState
@@ -28,6 +28,7 @@ import org.springframework.stereotype.Component
 @Component
 class KubernetesJobProvider implements JobProvider<KubernetesJobStatus> {
   String platform = "kubernetes"
+
   @Autowired
   AccountCredentialsProvider accountCredentialsProvider
 
@@ -69,4 +70,23 @@ class KubernetesJobProvider implements JobProvider<KubernetesJobStatus> {
     return [:]
   }
 
+  @Override
+  void cancelJob(String account, String location, String id) {
+    def credentials = accountCredentialsProvider.getCredentials(account)
+    if (!(credentials?.credentials instanceof KubernetesV1Credentials)) {
+      return
+    }
+
+    def trueCredentials = (KubernetesV1Credentials) (credentials as KubernetesNamedAccountCredentials).credentials
+
+    try {
+      if (!trueCredentials.apiAdaptor.getPod(location, id)) {
+        return
+      }
+
+      trueCredentials.apiAdaptor.deletePod(location, id)
+    } catch (Exception e) {
+      log.warn("Unable to delete $id in $location: $e.message", e);
+    }
+  }
 }

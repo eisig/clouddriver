@@ -18,7 +18,7 @@ package com.netflix.spinnaker.clouddriver.core
 
 import com.netflix.spinnaker.cats.agent.ExecutionInstrumentation
 import com.netflix.spinnaker.cats.agent.NoopExecutionInstrumentation
-import com.netflix.spinnaker.cats.redis.RedisClientDelegate
+import com.netflix.spinnaker.cats.redis.cache.RedisCacheOptions
 import com.netflix.spinnaker.clouddriver.cache.CacheConfig
 import com.netflix.spinnaker.clouddriver.cache.NoopOnDemandCacheUpdater
 import com.netflix.spinnaker.clouddriver.cache.OnDemandCacheUpdater
@@ -31,6 +31,7 @@ import com.netflix.spinnaker.clouddriver.model.ApplicationProvider
 import com.netflix.spinnaker.clouddriver.model.CloudMetricProvider
 import com.netflix.spinnaker.clouddriver.model.ClusterProvider
 import com.netflix.spinnaker.clouddriver.model.ElasticIpProvider
+import com.netflix.spinnaker.clouddriver.model.ImageProvider
 import com.netflix.spinnaker.clouddriver.model.InstanceProvider
 import com.netflix.spinnaker.clouddriver.model.InstanceTypeProvider
 import com.netflix.spinnaker.clouddriver.model.KeyPairProvider
@@ -41,6 +42,7 @@ import com.netflix.spinnaker.clouddriver.model.NoopApplicationProvider
 import com.netflix.spinnaker.clouddriver.model.NoopCloudMetricProvider
 import com.netflix.spinnaker.clouddriver.model.NoopClusterProvider
 import com.netflix.spinnaker.clouddriver.model.NoopElasticIpProvider
+import com.netflix.spinnaker.clouddriver.model.NoopImageProvider
 import com.netflix.spinnaker.clouddriver.model.NoopInstanceProvider
 import com.netflix.spinnaker.clouddriver.model.NoopInstanceTypeProvider
 import com.netflix.spinnaker.clouddriver.model.NoopKeyPairProvider
@@ -68,7 +70,7 @@ import com.netflix.spinnaker.clouddriver.security.AccountCredentialsRepository
 import com.netflix.spinnaker.clouddriver.security.DefaultAccountCredentialsProvider
 import com.netflix.spinnaker.clouddriver.security.MapBackedAccountCredentialsRepository
 import com.netflix.spinnaker.kork.core.RetrySupport
-import com.netflix.spinnaker.moniker.Namer
+import com.netflix.spinnaker.kork.jedis.RedisClientDelegate
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -80,6 +82,8 @@ import org.springframework.context.annotation.PropertySource
 import org.springframework.core.env.Environment
 import org.springframework.web.client.RestTemplate
 
+import java.time.Clock
+
 @Configuration
 @Import([
   RedisConfig,
@@ -88,6 +92,12 @@ import org.springframework.web.client.RestTemplate
 ])
 @PropertySource(value = "classpath:META-INF/clouddriver-core.properties", ignoreResourceNotFound = true)
 class CloudDriverConfig {
+
+  @Bean
+  @ConditionalOnMissingBean(Clock)
+  Clock clock() {
+    Clock.systemDefaultZone()
+  }
 
   @Bean
   String clouddriverUserAgentApplicationName(Environment environment) {
@@ -201,6 +211,12 @@ class CloudDriverConfig {
   }
 
   @Bean
+  @ConditionalOnMissingBean(ImageProvider)
+  ImageProvider noopImageProvider() {
+    new NoopImageProvider()
+  }
+
+  @Bean
   @ConditionalOnMissingBean(InstanceTypeProvider)
   InstanceTypeProvider noopInstanceTypeProvider() {
     new NoopInstanceTypeProvider()
@@ -243,9 +259,11 @@ class CloudDriverConfig {
   }
 
   @Bean
-  CoreProvider coreProvider(RedisClientDelegate redisClientDelegate, ApplicationContext applicationContext) {
+  CoreProvider coreProvider(RedisCacheOptions redisCacheOptions,
+                            RedisClientDelegate redisClientDelegate,
+                            ApplicationContext applicationContext) {
     return new CoreProvider([
-      new CleanupPendingOnDemandCachesAgent(redisClientDelegate, applicationContext)
+      new CleanupPendingOnDemandCachesAgent(redisCacheOptions, redisClientDelegate, applicationContext)
     ])
   }
 

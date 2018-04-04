@@ -29,7 +29,7 @@ import com.netflix.spinnaker.clouddriver.kubernetes.v2.description.manifest.Kube
 import com.netflix.spinnaker.clouddriver.kubernetes.v2.description.manifest.KubernetesManifest;
 import com.netflix.spinnaker.clouddriver.kubernetes.v2.description.manifest.KubernetesManifestAnnotater;
 import com.netflix.spinnaker.clouddriver.kubernetes.v2.op.OperationResult;
-import com.netflix.spinnaker.clouddriver.kubernetes.v2.op.deployer.KubernetesHandler;
+import com.netflix.spinnaker.clouddriver.kubernetes.v2.op.handler.KubernetesHandler;
 import com.netflix.spinnaker.clouddriver.kubernetes.v2.security.KubernetesV2Credentials;
 import com.netflix.spinnaker.clouddriver.model.ArtifactProvider;
 import com.netflix.spinnaker.clouddriver.names.NamerRegistry;
@@ -44,7 +44,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class KubernetesDeployManifestOperation implements AtomicOperation<OperationResult> {
@@ -83,6 +85,8 @@ public class KubernetesDeployManifestOperation implements AtomicOperation<Operat
       inputManifests = Collections.singletonList(description.getManifest());
     }
 
+    inputManifests = inputManifests.stream().filter(Objects::nonNull).collect(Collectors.toList());
+
     List<Artifact> requiredArtifacts = description.getRequiredArtifacts();
     if (requiredArtifacts == null) {
       requiredArtifacts = new ArrayList<>();
@@ -100,12 +104,18 @@ public class KubernetesDeployManifestOperation implements AtomicOperation<Operat
     Set<Artifact> boundArtifacts = new HashSet<>();
 
     for (KubernetesManifest manifest : inputManifests) {
-      if (StringUtils.isEmpty(manifest.getNamespace())) {
+      if (StringUtils.isEmpty(manifest.getNamespace()) && manifest.getKind().isNamespaced()) {
         manifest.setNamespace(credentials.getDefaultNamespace());
       }
 
       KubernetesResourceProperties properties = findResourceProperties(manifest);
+      if (properties == null) {
+        throw new IllegalArgumentException("Unsupported Kubernetes object kind '" + manifest.getKind().toString() + "', unable to continue.");
+      }
       KubernetesHandler deployer = properties.getHandler();
+      if (deployer == null) {
+        throw new IllegalArgumentException("No deployer available for Kubernetes object kind '" + manifest.getKind().toString() + "', unable to continue.");
+      }
 
       getTask().updateStatus(OP_NAME, "Swapping out artifacts in " + manifest.getFullResourceName() + " from context...");
       ReplaceResult replaceResult = deployer.replaceArtifacts(manifest, artifacts);

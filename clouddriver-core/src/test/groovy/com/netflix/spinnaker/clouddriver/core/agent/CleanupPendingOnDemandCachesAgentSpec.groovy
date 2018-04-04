@@ -13,13 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 package com.netflix.spinnaker.clouddriver.core.agent
 
-import com.netflix.spinnaker.cats.redis.JedisClientDelegate
+import com.netflix.spinnaker.cats.redis.cache.RedisCacheOptions
 import com.netflix.spinnaker.clouddriver.core.provider.CoreProvider
 import com.netflix.spinnaker.kork.jedis.EmbeddedRedis
+import com.netflix.spinnaker.kork.jedis.JedisClientDelegate
 import org.springframework.context.ApplicationContext
 import redis.clients.jedis.Jedis
 import redis.clients.jedis.JedisPool
@@ -32,11 +31,12 @@ class CleanupPendingOnDemandCachesAgentSpec extends Specification {
   @AutoCleanup("destroy")
   EmbeddedRedis embeddedRedis = EmbeddedRedis.embed()
 
+  def redisCacheOptions = new RedisCacheOptions(50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, true)
   def redisClientDelegate = new JedisClientDelegate(embeddedRedis.pool as JedisPool)
 
   def "should cleanup onDemand:members set for a provider"() {
     given:
-    def agent = new CleanupPendingOnDemandCachesAgent(redisClientDelegate, Stub(ApplicationContext))
+    def agent = new CleanupPendingOnDemandCachesAgent(redisCacheOptions, redisClientDelegate, Stub(ApplicationContext))
     def providers = [
         new CoreProvider([])
     ]

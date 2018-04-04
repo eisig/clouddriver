@@ -39,6 +39,7 @@ class KubernetesConfigurationProperties {
     Boolean configureImagePullSecrets
     List<String> namespaces
     List<String> omitNamespaces
+    String skin
     Integer cacheThreads
     List<LinkedDockerRegistryConfiguration> dockerRegistries
     List<String> requiredGroupMembership
@@ -46,6 +47,8 @@ class KubernetesConfigurationProperties {
     String namingStrategy = "kubernetesAnnotations"
     Boolean debug = false
     List<CustomKubernetesResource> customResources;
+    List<String> kinds
+    List<String> omitKinds
   }
 
   List<ManagedAccount> accounts = []
