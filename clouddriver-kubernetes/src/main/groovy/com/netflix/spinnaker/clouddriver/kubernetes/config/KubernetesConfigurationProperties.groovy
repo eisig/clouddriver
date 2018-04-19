@@ -35,6 +35,7 @@ class KubernetesConfigurationProperties {
     List<String> oAuthScopes
     String user
     String kubeconfigFile
+    String kubectlExecutable
     Boolean serviceAccount
     Boolean configureImagePullSecrets
     List<String> namespaces
@@ -64,5 +65,6 @@ class LinkedDockerRegistryConfiguration {
 class CustomKubernetesResource {
   String kubernetesKind
   String spinnakerKind = KubernetesSpinnakerKindMap.SpinnakerKind.UNCLASSIFIED.toString()
+  String deployPriority = "100"
   boolean versioned = false
 }
