@@ -53,16 +53,22 @@ public class HttpArtifactCredentials implements ArtifactCredentials {
     this.okHttpClient = okHttpClient;
     Builder builder = new Request.Builder();
     boolean useLogin = !StringUtils.isEmpty(account.getUsername()) && !StringUtils.isEmpty(account.getPassword());
+    boolean usePrivateToken = !StringUtils.isEmpty(account.getPrivateToken());
     boolean useUsernamePasswordFile = !StringUtils.isEmpty(account.getUsernamePasswordFile());
     boolean useAuth = useLogin || useUsernamePasswordFile;
     if (useAuth) {
-      String authHeader = "";
-      if (useUsernamePasswordFile) {
-        authHeader = "Basic " + Base64.encodeBase64String((credentialsFromFile(account.getUsernamePasswordFile())).getBytes());
-      } else if (useLogin) {
-        authHeader = "Basic " + Base64.encodeBase64String((account.getUsername() + ":" + account.getPassword()).getBytes());
+      if (usePrivateToken) {
+        builder.header("Private-Token", account.getPrivateToken());
+      } else {
+        String authHeader = "";
+        if (useUsernamePasswordFile) {
+          authHeader = "Basic " + Base64.encodeBase64String((credentialsFromFile(account.getUsernamePasswordFile())).getBytes());
+        } else if (useLogin) {
+          authHeader = "Basic " + Base64.encodeBase64String((account.getUsername() + ":" + account.getPassword()).getBytes());
+        }
+        builder.header("Authorization", authHeader);
       }
-      builder.header("Authorization", authHeader);
+
       log.info("Loaded credentials for http artifact account {}", account.getName());
     } else {
       log.info("No credentials included with http artifact account {}", account.getName());
