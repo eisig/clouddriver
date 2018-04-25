@@ -30,13 +30,17 @@ import com.netflix.spinnaker.clouddriver.titus.client.model.HealthStatus;
 import com.netflix.spinnaker.clouddriver.titus.client.model.Job;
 import com.netflix.spinnaker.clouddriver.titus.client.model.Task;
 import com.netflix.titus.grpc.protogen.*;
-import groovy.util.logging.Log;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 
 import java.net.URL;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
-@Log
+@Slf4j
 public class RegionScopedV3TitusClient implements TitusClient {
 
   /**
@@ -93,13 +97,20 @@ public class RegionScopedV3TitusClient implements TitusClient {
 
     }
     this.grpcBlockingStub = JobManagementServiceGrpc.newBlockingStub(channelFactory.build(titusRegion, environment, eurekaName, DEFAULT_CONNECT_TIMEOUT, registry));
+
+    if (!titusRegion.getFeatureFlags().isEmpty()) {
+      log.info("Experimental Titus V3 client feature flags {} enabled for account {} and region {}",
+        StringUtils.join(titusRegion.getFeatureFlags(),","),
+        titusRegion.getAccount(),
+        titusRegion.getName());
+    }
   }
 
   // APIs
   // ------------------------------------------------------------------------------------------
 
   @Override
-  public Job getJob(String jobId) {
+  public Job getJobAndAllRunningAndCompletedTasks(String jobId) {
     return new Job(grpcBlockingStub.findJob(JobId.newBuilder().setId(jobId).build()), getTasks(Arrays.asList(jobId), true).get(jobId));
   }
 
@@ -234,7 +245,10 @@ public class RegionScopedV3TitusClient implements TitusClient {
       cursor = resultPage.getPagination().getCursor();
       hasMore = resultPage.getPagination().getHasMore();
     } while (hasMore);
-    Map<String, List<com.netflix.titus.grpc.protogen.Task>> tasks = getTasks(Collections.emptyList(), false);
+    List<String> jobIds = grpcJobs.stream().map(grpcJob -> grpcJob.getId()).collect(
+      Collectors.toList()
+    );
+    Map<String, List<com.netflix.titus.grpc.protogen.Task>> tasks = getTasks(jobIds, false);
     return grpcJobs.stream().map(grpcJob -> new Job(grpcJob, tasks.get(grpcJob.getId()))).collect(Collectors.toList());
   }
 
@@ -250,10 +264,7 @@ public class RegionScopedV3TitusClient implements TitusClient {
       }
       TaskQuery.Builder taskQueryBuilder = TaskQuery.newBuilder();
       taskQueryBuilder.setPage(taskPage);
-      if (!jobIds.isEmpty()) {
-        taskQueryBuilder.putFilteringCriteria("jobIds", jobIds.stream().collect(Collectors.joining(",")));
-      }
-      taskQueryBuilder.putFilteringCriteria("attributes", "source:spinnaker");
+      taskQueryBuilder.putFilteringCriteria("jobIds", jobIds.stream().collect(Collectors.joining(",")));
       String filterByStates = "Accepted,Launched,StartInitiated,Started";
       if (includeDoneJobs) {
         filterByStates = filterByStates + ",KillInitiated,Finished";
