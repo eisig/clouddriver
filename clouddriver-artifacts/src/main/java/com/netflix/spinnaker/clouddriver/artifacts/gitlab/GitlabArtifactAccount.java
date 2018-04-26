@@ -15,7 +15,7 @@
  *
  */
 
-package com.netflix.spinnaker.clouddriver.artifacts.http;
+package com.netflix.spinnaker.clouddriver.artifacts.gitlab;
 
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -26,20 +26,18 @@ import org.apache.commons.lang3.StringUtils;
 
 @EqualsAndHashCode(callSuper = true)
 @Data
-public class HttpArtifactAccount extends ArtifactAccount {
+public class GitlabArtifactAccount extends ArtifactAccount {
   private String name;
   /*
     One of the following are required for auth:
      - username and password
      - usernamePasswordFile : path to file containing "username:password"
    */
-  private String username;
-  private String password;
-  private String usernamePasswordFile;
   private String privateToken;
+  private String privateTokenFile;
 
   @JsonIgnore
   public boolean usesAuth() {
-    return !(StringUtils.isEmpty(username) && StringUtils.isEmpty(password) && StringUtils.isEmpty(usernamePasswordFile));
+    return !(StringUtils.isEmpty(privateToken) && StringUtils.isEmpty(privateTokenFile));
   }
 }

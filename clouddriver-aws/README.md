@@ -121,3 +121,27 @@ there we share those AMIs into the deployment account on deploy. The default val
 `default.bake.account` is `default`, so if you don't have an account named `default` any
 more you will want to update the `orca.yml` with whichever account is the source of
 custom AWS AMIs. If the default account is missing, the value further falls back to `providers.aws.primaryCredentials.name`.
+
+### Users from aws China(cn-north-1)
+Users from  cn-north-1 or other regions not using the standard partition should change the resource ARN to match their region.
+For example, in cn-north-1, 
+`arn:aws:iam::123456789012:role/spinnakerManaged` should be `arn:aws-cn:iam::123456789012:role/spinnakerManaged`
+
+In the AWS config section for clouddriver, assumeRole should be config explicitly for each account:
+````yml
+aws:
+  enabled: true
+  defaultRegions:
+    - name: cn-north-1
+  accounts:
+    - name: managing
+      accountId: "123456789012"
+      assumeRole: arn:aws-cn:iam::123456789012:role/spinnakerManaged 
+      regions:
+        - name: cn-north-1
+    - name: managed
+      accountId: "987654321098"
+      assumeRole: arn:aws-cn:iam::987654321098:role/spinnakerManaged 
+      regions:
+        - name:cn-north-1
+````
