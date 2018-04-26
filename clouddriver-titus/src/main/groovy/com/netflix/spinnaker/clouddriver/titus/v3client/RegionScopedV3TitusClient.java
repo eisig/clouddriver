@@ -21,6 +21,7 @@ import com.google.protobuf.Message;
 import com.google.protobuf.util.JsonFormat;
 import com.netflix.frigga.Names;
 import com.netflix.spectator.api.Registry;
+import com.netflix.spinnaker.clouddriver.titus.TitusException;
 import com.netflix.spinnaker.clouddriver.titus.client.TitusClient;
 import com.netflix.spinnaker.clouddriver.titus.client.TitusClientObjectMapper;
 import com.netflix.spinnaker.clouddriver.titus.client.TitusJobCustomizer;
@@ -29,15 +30,14 @@ import com.netflix.spinnaker.clouddriver.titus.client.model.*;
 import com.netflix.spinnaker.clouddriver.titus.client.model.HealthStatus;
 import com.netflix.spinnaker.clouddriver.titus.client.model.Job;
 import com.netflix.spinnaker.clouddriver.titus.client.model.Task;
+import com.netflix.spinnaker.kork.core.RetrySupport;
 import com.netflix.titus.grpc.protogen.*;
+import io.grpc.Status;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -68,9 +68,10 @@ public class RegionScopedV3TitusClient implements TitusClient {
 
   private final JobManagementServiceGrpc.JobManagementServiceBlockingStub grpcBlockingStub;
 
+  private final RetrySupport retrySupport;
 
-  public RegionScopedV3TitusClient(TitusRegion titusRegion, Registry registry, List<TitusJobCustomizer> titusJobCustomizers, String environment, String eurekaName, GrpcChannelFactory grpcChannelFactory) {
-    this(titusRegion, DEFAULT_CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT, TitusClientObjectMapper.configure(), registry, titusJobCustomizers, environment, eurekaName, grpcChannelFactory);
+  public RegionScopedV3TitusClient(TitusRegion titusRegion, Registry registry, List<TitusJobCustomizer> titusJobCustomizers, String environment, String eurekaName, GrpcChannelFactory grpcChannelFactory, RetrySupport retrySupport) {
+    this(titusRegion, DEFAULT_CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT, TitusClientObjectMapper.configure(), registry, titusJobCustomizers, environment, eurekaName, grpcChannelFactory, retrySupport);
   }
 
   public RegionScopedV3TitusClient(TitusRegion titusRegion,
@@ -81,13 +82,15 @@ public class RegionScopedV3TitusClient implements TitusClient {
                                    List<TitusJobCustomizer> titusJobCustomizers,
                                    String environment,
                                    String eurekaName,
-                                   GrpcChannelFactory channelFactory
+                                   GrpcChannelFactory channelFactory,
+                                   RetrySupport retrySupport
   ) {
     this.titusRegion = titusRegion;
     this.registry = registry;
     this.titusJobCustomizers = titusJobCustomizers;
     this.environment = environment;
     this.objectMapper = objectMapper;
+    this.retrySupport = retrySupport;
 
     String titusHost = "";
     try {
@@ -100,7 +103,7 @@ public class RegionScopedV3TitusClient implements TitusClient {
 
     if (!titusRegion.getFeatureFlags().isEmpty()) {
       log.info("Experimental Titus V3 client feature flags {} enabled for account {} and region {}",
-        StringUtils.join(titusRegion.getFeatureFlags(),","),
+        StringUtils.join(titusRegion.getFeatureFlags(), ","),
         titusRegion.getAccount(),
         titusRegion.getName());
     }
@@ -205,9 +208,33 @@ public class RegionScopedV3TitusClient implements TitusClient {
 
   @Override
   public void terminateTasksAndShrink(TerminateTasksAndShrinkJobRequest terminateTasksAndShrinkJob) {
-    terminateTasksAndShrinkJob.getTaskIds().forEach(id ->
-      grpcBlockingStub.killTask(TaskKillRequest.newBuilder().setTaskId(id).setShrink(terminateTasksAndShrinkJob.isShrink()).build())
+    List<String> failedTasks = new ArrayList<>();
+    terminateTasksAndShrinkJob.getTaskIds().forEach(id -> {
+        try {
+          killTaskWithRetry(id, terminateTasksAndShrinkJob);
+        } catch (Exception e) {
+          failedTasks.add(id);
+          log.error("Failed to terminate and shrink titus task {} in account {} and region {}", id, titusRegion.getAccount(), titusRegion.getName(), e);
+        }
+      }
     );
+    if (!failedTasks.isEmpty()) {
+      throw new TitusException("Failed to terminate and shrink titus tasks: " + StringUtils.join(failedTasks, ","));
+    }
+  }
+
+  private void killTaskWithRetry(String id, TerminateTasksAndShrinkJobRequest terminateTasksAndShrinkJob) {
+    try {
+      grpcBlockingStub.killTask(TaskKillRequest.newBuilder().setTaskId(id).setShrink(terminateTasksAndShrinkJob.isShrink()).build());
+    } catch (io.grpc.StatusRuntimeException e){
+      if (e.getStatus() == Status.NOT_FOUND) {
+        log.warn("Titus task {} not found, continuing with terminate tasks and shrink job request.", id);
+      } else {
+        retrySupport.retry(() ->
+            grpcBlockingStub.killTask(TaskKillRequest.newBuilder().setTaskId(id).setShrink(terminateTasksAndShrinkJob.isShrink()).build())
+        , 2, 1000, false);
+      }
+    }
   }
 
   @Override
@@ -245,9 +272,14 @@ public class RegionScopedV3TitusClient implements TitusClient {
       cursor = resultPage.getPagination().getCursor();
       hasMore = resultPage.getPagination().getHasMore();
     } while (hasMore);
-    List<String> jobIds = grpcJobs.stream().map(grpcJob -> grpcJob.getId()).collect(
-      Collectors.toList()
-    );
+
+    List<String> jobIds = Collections.emptyList();
+    if (!titusRegion.getFeatureFlags().contains("jobIds")) {
+      jobIds = grpcJobs.stream().map(grpcJob -> grpcJob.getId()).collect(
+        Collectors.toList()
+      );
+    }
+
     Map<String, List<com.netflix.titus.grpc.protogen.Task>> tasks = getTasks(jobIds, false);
     return grpcJobs.stream().map(grpcJob -> new Job(grpcJob, tasks.get(grpcJob.getId()))).collect(Collectors.toList());
   }
@@ -264,7 +296,12 @@ public class RegionScopedV3TitusClient implements TitusClient {
       }
       TaskQuery.Builder taskQueryBuilder = TaskQuery.newBuilder();
       taskQueryBuilder.setPage(taskPage);
-      taskQueryBuilder.putFilteringCriteria("jobIds", jobIds.stream().collect(Collectors.joining(",")));
+      if (!jobIds.isEmpty()) {
+        taskQueryBuilder.putFilteringCriteria("jobIds", jobIds.stream().collect(Collectors.joining(",")));
+      }
+      if (titusRegion.getFeatureFlags().contains("jobIds")) {
+        taskQueryBuilder.putFilteringCriteria("attributes", "source:spinnaker");
+      }
       String filterByStates = "Accepted,Launched,StartInitiated,Started";
       if (includeDoneJobs) {
         filterByStates = filterByStates + ",KillInitiated,Finished";
